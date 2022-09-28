@@ -84,6 +84,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.zip.Deflater;
 import java.util.zip.GZIPOutputStream;
 
 import javax.net.ssl.KeyManager;
@@ -1412,6 +1413,24 @@ public abstract class NanoHTTPD {
         }
 
         /**
+         * An {@link GZIPOutputStream} that avoids triggering Android's leaked
+         * closeable warning by calling it's {@link Deflater}'s
+         * {@link Deflater#end()} method when {@link #finish()} is called.
+         */
+        private static class EndingGZIPOutputStream extends GZIPOutputStream {
+
+            EndingGZIPOutputStream(OutputStream outputStream) throws IOException {
+                super(outputStream);
+            }
+
+            @Override
+            public void finish() throws IOException {
+                super.finish();
+                def.end();
+            }
+        }
+
+        /**
          * Output stream that will automatically send every write to the wrapped
          * OutputStream according to chunked transfer:
          * http://www.w3.org/Protocols/rfc2616/rfc2616-sec3.html#sec3.6.1
@@ -1660,7 +1679,7 @@ public abstract class NanoHTTPD {
 
         private void sendBodyWithCorrectEncoding(OutputStream outputStream, long pending) throws IOException {
             if (encodeAsGzip) {
-                GZIPOutputStream gzipOutputStream = new GZIPOutputStream(outputStream);
+                GZIPOutputStream gzipOutputStream = new EndingGZIPOutputStream(outputStream);
                 sendBody(gzipOutputStream, -1);
                 gzipOutputStream.finish();
             } else {
